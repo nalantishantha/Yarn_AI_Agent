@@ -19,7 +19,7 @@ A garment factory imports yarn directly from external importers/exporters. A **y
 ### Key Domain Definitions
 - **"Article"** = an order/batch requirement (a one-off requirement spec) — NOT a fixed product design or category. Each article has its own requirement values for color, thickness, quality, price, lead time, etc.
 - **Attribute alignment confirmed:** The `yarn_details` table and the requirement fields the yarn tech enters use the same/closely aligned attribute names and scales (e.g., same quality grading system, same units). This means no complex feature-mapping/normalization layer is needed between requirements and yarn records.
-- **Database engine:** Not yet confirmed by the user — likely MySQL or PostgreSQL, to be verified with whoever manages the existing database. Architecture is deliberately engine-agnostic (via SQLAlchemy) so this doesn't block progress (see Section 7.5).
+- **Database engine:** PostgreSQL (Confirmed). Architecture is deliberately engine-agnostic (via SQLAlchemy) so this doesn't block progress (see Section 7.5).
 
 ---
 
@@ -398,7 +398,7 @@ agent_tool_schema = {
 - CRUD utility functions: read existing tables, read/write policy table
 - Data validation & constraints — applies mainly to the new policy table
 
-**Database engine:** Not yet confirmed (likely MySQL or PostgreSQL). Architecture uses SQLAlchemy specifically to make this a low-risk open item — switching engines later mainly changes a connection string and driver, not query logic. **Action item:** confirm actual engine + get connection credentials before Module 2 begins.
+**Database engine:** PostgreSQL (Confirmed). Architecture uses SQLAlchemy specifically to make this a low-risk open item — switching engines later mainly changes a connection string and driver, not query logic.
 
 ---
 
@@ -413,7 +413,7 @@ agent_tool_schema = {
 | Agent observability | **LangSmith** | Native tracing/debugging companion for LangGraph — full visibility into every reasoning/tool-call step |
 | LLM provider (Phase 1 — Dev/Prototype) | **Google Gemini API (free tier)** | Genuinely free tier with function-calling support, no trial-credit expiry pressure |
 | LLM provider (Phase 2 — Production) | **OpenAI GPT (paid)**, fallback **Anthropic Claude** | Matches existing paid subscription; both have mature function-calling support |
-| Database | **PostgreSQL or MySQL** (to be confirmed) | Existing company database; exact engine not yet confirmed |
+| Database | **PostgreSQL** | Existing company database; confirmed as PostgreSQL |
 | ORM / query layer | **SQLAlchemy** | Works identically across PostgreSQL and MySQL — removes risk from DB-engine uncertainty |
 | Frontend (Chat UI) | **React** | Component-based, huge ecosystem for chat-style UIs, easy to iterate on |
 | API communication | **REST (JSON over HTTP)** | Simple, sufficient for MVP request/response pattern |
