@@ -2,7 +2,8 @@ from sqlalchemy.orm import Session
 from sqlalchemy import or_
 from typing import List, Optional
 
-from . import models, schemas
+from app.db import models
+from app.schemas import schemas
 
 
 def get_active_sourcing_constraints(db: Session, scope: Optional[str] = None) -> List[models.SourcingConstraint]:
@@ -33,9 +34,10 @@ def create_sourcing_constraint(db: Session, constraint: schemas.SourcingConstrai
 def get_yarn_suppliers(db: Session, skip: int = 0, limit: int = 100) -> List[models.YarnSupplier]:
     """
     Retrieves a paginated list of all available yarns and their suppliers.
-    (This will later be expanded to include deterministic rule-based filters).
     """
     return db.query(models.YarnSupplier).offset(skip).limit(limit).all()
+
+
 
 def get_design_articles(db: Session, skip: int = 0, limit: int = 100) -> List[models.DesignDatabase]:
     """

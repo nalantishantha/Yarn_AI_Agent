@@ -49,6 +49,12 @@ class YarnSupplier(Base):
     Supplier_Twist_Per_Metre = Column('Supplier Twist Per Metre', Float)
     Supplier_Oil_Content = Column('Supplier Oil Content', Float)
     
+    # New parsed numerical columns
+    lt_min_days = Column(Integer, nullable=True)
+    lt_max_days = Column(Integer, nullable=True)
+    moq_min = Column(Float, nullable=True)
+    moq_max = Column(Float, nullable=True)
+    
     # Relationship with design database
     designs = relationship("DesignDatabase", back_populates="yarn")
 

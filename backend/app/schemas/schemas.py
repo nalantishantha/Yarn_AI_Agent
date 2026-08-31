@@ -74,3 +74,27 @@ class DesignDatabaseResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+class YarnFilterRequest(BaseModel):
+    """
+    Structured request for deterministic hard filters.
+    All properties are optional; the filter engine only applies the ones provided.
+    """
+    price_max: Optional[float] = None
+    tenacity_min: Optional[float] = None
+    elongation_min: Optional[float] = None
+    count_dtex_min: Optional[float] = None
+    count_dtex_max: Optional[float] = None
+    shrinkage_max: Optional[float] = None
+    twist_per_metre_min: Optional[float] = None
+    twist_per_metre_max: Optional[float] = None
+    material_type: Optional[str] = None
+    supplier: Optional[str] = None
+    tensile_strength_min: Optional[float] = None
+    supplier_tenacity_min: Optional[float] = None
+    supplier_elongation_min: Optional[float] = None
+    lustre: Optional[str] = None
+    country: Optional[str] = None
+    fully_drawn_textured: Optional[str] = None
+    lead_time_max_days: Optional[int] = None
+    moq_max: Optional[float] = None
