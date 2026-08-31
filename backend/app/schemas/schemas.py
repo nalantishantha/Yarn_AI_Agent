@@ -91,6 +91,7 @@ class YarnFilterRequest(BaseModel):
     material_type: Optional[str] = None
     supplier: Optional[str] = None
     tensile_strength_min: Optional[float] = None
+    breaking_tenacity_min: Optional[float] = None
     supplier_tenacity_min: Optional[float] = None
     supplier_elongation_min: Optional[float] = None
     lustre: Optional[str] = None
