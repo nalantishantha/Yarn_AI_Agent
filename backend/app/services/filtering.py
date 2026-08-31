@@ -1,4 +1,5 @@
 from sqlalchemy.orm import Session
+from sqlalchemy import or_
 from typing import List
 
 from app.db import models
@@ -30,19 +31,37 @@ def get_matching_yarns(db: Session, filters: schemas.YarnFilterRequest) -> List[
         query = query.filter(models.YarnSupplier.Hot_Water_Shrinkage <= filters.shrinkage_max)
         
     if filters.twist_per_metre_min is not None:
-        query = query.filter(models.YarnSupplier.TPM >= filters.twist_per_metre_min)
+        query = query.filter(
+            or_(
+                models.YarnSupplier.TPM >= filters.twist_per_metre_min,
+                models.YarnSupplier.PPM >= filters.twist_per_metre_min
+            )
+        )
         
     if filters.material_type is not None:
-        query = query.filter(models.YarnSupplier.Type.ilike(f"%{filters.material_type}%"))
+        query = query.filter(
+            or_(
+                models.YarnSupplier.Type.ilike(f"%{filters.material_type}%"),
+                models.YarnSupplier.Material_Type.ilike(f"%{filters.material_type}%")
+            )
+        )
         
     if filters.supplier is not None:
         query = query.filter(models.YarnSupplier.Supplier.ilike(f"%{filters.supplier}%"))
         
     if filters.twist_per_metre_max is not None:
-        query = query.filter(models.YarnSupplier.TPM <= filters.twist_per_metre_max)
+        query = query.filter(
+            or_(
+                models.YarnSupplier.TPM <= filters.twist_per_metre_max,
+                models.YarnSupplier.PPM <= filters.twist_per_metre_max
+            )
+        )
         
     if filters.tensile_strength_min is not None:
         query = query.filter(models.YarnSupplier.Tensile_Strength >= filters.tensile_strength_min)
+        
+    if filters.breaking_tenacity_min is not None:
+        query = query.filter(models.YarnSupplier.Brecking_Tenacity >= filters.breaking_tenacity_min)
         
     if filters.supplier_tenacity_min is not None:
         query = query.filter(models.YarnSupplier.Supplier_Tenacity >= filters.supplier_tenacity_min)
@@ -51,7 +70,13 @@ def get_matching_yarns(db: Session, filters: schemas.YarnFilterRequest) -> List[
         query = query.filter(models.YarnSupplier.Supplier_Elongation >= filters.supplier_elongation_min)
         
     if filters.lustre is not None:
-        query = query.filter(models.YarnSupplier.Lustre.ilike(f"%{filters.lustre}%"))
+        clean_lustre = filters.lustre.replace("-", " ")
+        query = query.filter(
+            or_(
+                models.YarnSupplier.Lustre.ilike(f"%{filters.lustre}%"),
+                models.YarnSupplier.Lustre.ilike(f"%{clean_lustre}%")
+            )
+        )
         
     if filters.country is not None:
         query = query.filter(models.YarnSupplier.Country.ilike(f"%{filters.country}%"))
