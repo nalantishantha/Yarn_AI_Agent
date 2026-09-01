@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, List, Dict
 from langchain_core.tools import tool
 from app.db.database import SessionLocal
 from app.services.filtering import get_matching_yarns
@@ -89,5 +89,37 @@ def filter_yarns_tool(
     finally:
         db.close()
 
+from app.services.scoring import score_and_sort_yarns
+
+@tool
+def score_yarns_tool(yarn_ids: List[int], weights: Dict[str, float]):
+    """
+    Applies the Weighted Scoring Formula to a list of candidate yarns to rank them based on user priorities.
+    Use this tool AFTER calling filter_yarns_tool to sort the returned yarns according to what the user values most.
+    
+    Args:
+        yarn_ids: A list of Material Numbers (IDs) returned from the previous filtering step.
+        weights: A dictionary where keys are the attributes to prioritize (e.g. 'Price', 'lt_max_days', 'Quality', 'Brecking_Tenacity')
+                 and values are decimals between 0.0 and 1.0 representing the percentage weight (e.g. 0.5 for 50%).
+                 The sum of all values should equal 1.0.
+    """
+    db = SessionLocal()
+    try:
+        results = score_and_sort_yarns(db, yarn_ids, weights)
+        
+        if not results:
+            return "No yarns could be scored."
+            
+        formatted = []
+        for i, item in enumerate(results[:10], 1):
+            y = item["yarn"]
+            score = item["score"]
+            formatted.append(
+                f"{i}. [Score: {score}] Material_No: {y.Material_No}, Type: {y.Type}, Price: ${y.Price}, Lead Time: {y.lt_max_days} days, Country: {y.Country}"
+            )
+        return "\n".join(formatted)
+    finally:
+        db.close()
+
 # List of tools to be bound to the agent
-AGENT_TOOLS = [filter_yarns_tool]
+AGENT_TOOLS = [filter_yarns_tool, score_yarns_tool]
