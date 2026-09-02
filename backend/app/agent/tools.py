@@ -1,9 +1,11 @@
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, Any
 from langchain_core.tools import tool
 from app.db.database import SessionLocal
 from app.services.filtering import get_matching_yarns
 from app.schemas.schemas import YarnFilterRequest
-
+from app.db import crud
+from app.schemas import schemas
+from app.services.scoring import score_and_sort_yarns
 @tool
 def filter_yarns_tool(
     price_max: Optional[float] = None,
@@ -89,8 +91,6 @@ def filter_yarns_tool(
     finally:
         db.close()
 
-from app.services.scoring import score_and_sort_yarns
-
 @tool
 def score_yarns_tool(yarn_ids: List[int], weights: Dict[str, float]):
     """
@@ -121,5 +121,63 @@ def score_yarns_tool(yarn_ids: List[int], weights: Dict[str, float]):
     finally:
         db.close()
 
+@tool
+def add_sourcing_constraint_tool(
+    constraint_type: str,
+    target_value: str,
+    scope: str,
+    action: str,
+    weight: Optional[float] = None,
+    reason: Optional[str] = None
+):
+    """
+    Creates a new long-term business policy (sourcing constraint) in the database.
+    Use this when the user explicitly mentions a long-term rule (e.g. "blacklist supplier X for all orders", "we have a discount from supplier Y").
+    
+    Args:
+        constraint_type: Type of constraint (e.g. "exclude_supplier", "prefer_supplier", "exclude_country", "prefer_country")
+        target_value: The name of the supplier or country (e.g. "China", "Supplier X")
+        scope: The scope of the policy (use "all_orders" by default unless specified)
+        action: "hard_restrict" (for excludes/blacklists) or "boost" (for prefers/discounts)
+        weight: If action is "boost", a decimal weight to add to the score (e.g. 0.2). Leave null for hard_restrict.
+        reason: Optional text explaining why this policy exists.
+    """
+    db = SessionLocal()
+    try:
+        req = schemas.SourcingConstraintCreate(
+            constraint_type=constraint_type,
+            target_value=target_value,
+            scope=scope,
+            action=action,
+            weight=weight,
+            reason=reason
+        )
+        crud.create_sourcing_constraint(db, req)
+        return "Successfully proposed the new policy. It is pending user confirmation."
+    finally:
+        db.close()
+
+@tool
+def get_active_policies_tool(scope: str = "all_orders"):
+    """
+    Fetches the currently active long-term business policies from the database.
+    Use this as STEP 3 to see if there are any restrictions or score boosts you need to apply to the final results.
+    
+    Args:
+        scope: The scope of the policies to fetch. Usually "all_orders".
+    """
+    db = SessionLocal()
+    try:
+        policies = crud.get_active_sourcing_constraints(db, scope=scope)
+        if not policies:
+            return "No active policies found."
+            
+        formatted = []
+        for p in policies:
+            formatted.append(f"- Type: {p.constraint_type}, Target: {p.target_value}, Action: {p.action}, Weight: {p.weight}")
+        return "\n".join(formatted)
+    finally:
+        db.close()
+
 # List of tools to be bound to the agent
-AGENT_TOOLS = [filter_yarns_tool, score_yarns_tool]
+AGENT_TOOLS = [filter_yarns_tool, score_yarns_tool, add_sourcing_constraint_tool, get_active_policies_tool]

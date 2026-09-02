@@ -27,14 +27,19 @@ llm_with_tools = gemini_with_tools.with_fallbacks([openai_with_tools])
 from langchain_core.messages import SystemMessage
 
 SYSTEM_PROMPT = """You are a Yarn Selection AI Agent.
-When a user asks to find yarns, follow this EXACT 2-step process:
+You MUST follow this EXACT sequential flow. CRITICAL RULE: NEVER call multiple tools in parallel at the same time. Always wait for the result of one tool before calling the next.
 
-STEP 1: FILTERING
+STEP 1: DATABASE POLICIES (WRITE)
+Check if the user stated any *long-term* policies (e.g., "blacklist supplier Z for all orders").
+If so, call `add_sourcing_constraint_tool` to propose writing it to the database.
+CRITICAL RULE: NEVER call `add_sourcing_constraint_tool` for one-off policies that only apply to the current search (e.g., "for this order", "just for this query", "this time").
+
+STEP 2: FILTERING
 Call `filter_yarns_tool` with the exact attributes the user mentioned.
-Wait for the database to return the matching yarns. Do NOT call `score_yarns_tool` in the same step.
+Wait for the database to return the matching yarns. 
 CRITICAL RULE: NEVER call `filter_yarns_tool` more than once in the same conversation thread. If you already called it, reuse the Material Numbers you already found!
 
-STEP 2: SCORING / RANKING
+STEP 3: SCORING / RANKING
 If `filter_yarns_tool` returns multiple yarns, you MUST score and rank them using `score_yarns_tool`.
 However, BEFORE calling `score_yarns_tool`, determine the priority weights by following ONE of these 3 scenarios based on the user's prompt:
 
@@ -71,11 +76,21 @@ Please select which attributes you want to prioritize from the list below:
 7. Thickness (Count dtex)
 
 You can tell me which ones you care about, and optionally provide percentage weights (e.g., '1 and 2 equally' or 'Price 70%, Lead Time 30%'). If you just list the attributes, I will weight them equally."
+Sometimes user will give few attributes with exact percentages and tell equally divide remaining among other attributes.. For this case you have to calculate weights for all attributes including remaining ones. total weights is always 100%...
 
 Wait for the user's reply. Do NOT call `score_yarns_tool` yet.
 
-When the user gives permission (or you already have explicit percentages), call `score_yarns_tool`, passing the list of Material Numbers from Step 1, and the dictionary of decimal weights (0.0 to 1.0).
-Present the final scored results to the user.
+STEP 4: POLICIES (READ) & FINAL SYNTHESIS
+When you have successfully run `score_yarns_tool`, you MUST NOT output the final result immediately.
+Instead, call `get_active_policies_tool` to fetch any active long-term policies from the database.
+
+Once you have the DB policies, YOU (the AI Agent) must act as the final policy engine:
+1. Read the scored list returned from Step 3.
+2. Review any *one-off* policies stated by the user (e.g. "prefer supplier X just for this query").
+3. Remove any yarns from that list that violate a "hard_restrict" policy (either from the DB or the user's prompt).
+4. Add the "weight" to the score of any yarns that match a "boost" policy (from the DB or user's prompt).
+5. Re-sort the final list based on the new scores.
+Present the final policy-adjusted results to the user, explaining which policies were applied.
 """
 
 def call_model(state: AgentState):
@@ -89,24 +104,39 @@ def create_agent_graph():
     """
     builder = StateGraph(AgentState)
     
+    # Split tools into safe and sensitive for human-in-the-loop
+    safe_tools = [t for t in AGENT_TOOLS if t.name != "add_sourcing_constraint_tool"]
+    sensitive_tools = [t for t in AGENT_TOOLS if t.name == "add_sourcing_constraint_tool"]
+    
     # Add Nodes
     builder.add_node("agent", call_model)
-    builder.add_node("tools", ToolNode(AGENT_TOOLS))
+    builder.add_node("tools", ToolNode(safe_tools))
+    builder.add_node("sensitive_tools", ToolNode(sensitive_tools))
     
     # Add Edges
     builder.add_edge(START, "agent")
     
-    # Conditional edge: if LLM calls tool -> go to tools. Otherwise -> END.
-    builder.add_conditional_edges(
-        "agent",
-        tools_condition,
-    )
+    def route_tools(state: AgentState):
+        messages = state.get("messages", [])
+        if not messages:
+            return END
+        last_message = messages[-1]
+        if hasattr(last_message, "tool_calls") and last_message.tool_calls:
+            for tool_call in last_message.tool_calls:
+                if tool_call["name"] == "add_sourcing_constraint_tool":
+                    return "sensitive_tools"
+            return "tools"
+        return END
+
+    # Conditional edge: route to appropriate tool node
+    builder.add_conditional_edges("agent", route_tools)
     
     builder.add_edge("tools", "agent")
+    builder.add_edge("sensitive_tools", "agent")
     
     # Compile with memory
     memory = MemorySaver()
-    graph = builder.compile(checkpointer=memory)
+    graph = builder.compile(checkpointer=memory, interrupt_before=["sensitive_tools"])
     
     return graph
 
