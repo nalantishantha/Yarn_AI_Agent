@@ -25,6 +25,12 @@ def score_and_sort_yarns(db: Session, yarn_ids: List[int], weights: Dict[str, fl
         weights['Brecking_Tenacity'] = weights.get('Brecking_Tenacity', 0.0) + (q_weight / 2.0)
         weights['Elongation'] = weights.get('Elongation', 0.0) + (q_weight / 2.0)
 
+    # Validate weight keys
+    valid_keys = set(LOWER_IS_BETTER) | set(HIGHER_IS_BETTER)
+    unrecognized = set(weights.keys()) - valid_keys
+    if unrecognized:
+        raise ValueError(f"Unrecognized weight keys: {sorted(list(unrecognized))}. Valid keys are: {sorted(list(valid_keys.union({'Quality'})))}")
+
     # Normalize weights so they sum to 1.0 (just in case LLM math was slightly off)
     total_weight = sum(weights.values())
     if total_weight > 0:
