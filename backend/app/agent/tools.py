@@ -1,9 +1,12 @@
-from typing import Optional
+from typing import Optional, List, Dict, Any
 from langchain_core.tools import tool
 from app.db.database import SessionLocal
 from app.services.filtering import get_matching_yarns
 from app.schemas.schemas import YarnFilterRequest
-
+from app.db import crud, models
+from app.schemas import schemas
+from app.services.scoring import score_and_sort_yarns
+from app.services.policy_engine import apply_policies
 @tool
 def filter_yarns_tool(
     price_max: Optional[float] = None,
@@ -89,5 +92,159 @@ def filter_yarns_tool(
     finally:
         db.close()
 
+@tool
+def score_yarns_tool(yarn_ids: List[int], weights: Dict[str, float]):
+    """
+    Applies the Weighted Scoring Formula to a list of candidate yarns to rank them based on user priorities.
+    Use this tool AFTER calling filter_yarns_tool to sort the returned yarns according to what the user values most.
+    
+    Args:
+        yarn_ids: A list of Material Numbers (IDs) returned from the previous filtering step.
+        weights: A dictionary where keys are the attributes to prioritize and values are decimals 
+                 between 0.0 and 1.0 representing the percentage weight. The sum of all values should equal 1.0.
+                 Valid keys MUST be chosen from this exact list:
+                 ['Price', 'lt_max_days', 'Quality', 'moq_max', 'Hot_Water_Shrinkage', 'Tensile_Strength', 'Count_dtex']
+    """
+    db = SessionLocal()
+    try:
+        try:
+            results = score_and_sort_yarns(db, yarn_ids, weights)
+        except ValueError as e:
+            return str(e)
+        
+        if not results:
+            return "No yarns could be scored."
+            
+        formatted = []
+        for i, item in enumerate(results[:10], 1):
+            y = item["yarn"]
+            score = item["score"]
+            formatted.append(
+                f"{i}. [Score: {score}] Material_No: {y.Material_No}, Type: {y.Type}, Price: ${y.Price}, Lead Time: {y.lt_max_days} days, Country: {y.Country}"
+            )
+        return "\n".join(formatted)
+    finally:
+        db.close()
+
+@tool
+def add_sourcing_constraint_tool(
+    constraint_type: str,
+    target_value: str,
+    scope: str,
+    action: str,
+    weight: Optional[float] = None,
+    reason: Optional[str] = None
+):
+    """
+    Creates a new long-term business policy (sourcing constraint) in the database.
+    Use this when the user explicitly mentions a long-term rule (e.g. "blacklist supplier X for all orders", "we have a discount from supplier Y").
+    
+    Args:
+        constraint_type: Type of constraint (e.g. "exclude_supplier", "prefer_supplier", "exclude_country", "prefer_country")
+        target_value: The name of the supplier or country (e.g. "China", "Supplier X")
+        scope: The scope of the policy (use "all_orders" by default unless specified)
+        action: "hard_restrict" (for excludes/blacklists or strict inclusions) or "boost" (for soft preferences/discounts). NOTE: "prefer_supplier" + "hard_restrict" means MUST USE ONLY this supplier.
+        weight: If action is "boost", a decimal weight to add to the score (e.g. 0.2). Leave null for hard_restrict.
+        reason: Optional text explaining why this policy exists.
+    """
+    db = SessionLocal()
+    try:
+        req = schemas.SourcingConstraintCreate(
+            constraint_type=constraint_type,
+            target_value=target_value,
+            scope=scope,
+            action=action,
+            weight=weight,
+            reason=reason
+        )
+        crud.create_sourcing_constraint(db, req)
+        return "Successfully proposed the new policy. It is pending user confirmation."
+    finally:
+        db.close()
+
+@tool
+def get_active_policies_tool(scope: str = "all_orders"):
+    """
+    Fetches the currently active long-term business policies from the database.
+    Use this as STEP 3 to see if there are any restrictions or score boosts you need to apply to the final results.
+    
+    Args:
+        scope: The scope of the policies to fetch. Usually "all_orders".
+    """
+    db = SessionLocal()
+    try:
+        policies = crud.get_active_sourcing_constraints(db, scope=scope)
+        if not policies:
+            return "No active policies found."
+            
+        formatted = []
+        for p in policies:
+            formatted.append(f"- Type: {p.constraint_type}, Target: {p.target_value}, Action: {p.action}, Weight: {p.weight}")
+        return "\n".join(formatted)
+    finally:
+        db.close()
+
+@tool
+def apply_policies_tool(
+    yarn_ids: List[int],
+    scores: Dict[int, float],
+    one_off_constraints: Optional[List[Dict[str, Any]]] = None,
+):
+    """
+    Applies active sourcing policies (from the database) plus any one-off,
+    query-specific constraints the user stated, to a scored list of candidate yarns.
+    Removes yarns that violate a hard_restrict policy, adds boost weight to yarns
+    matching a boost policy, and re-sorts. ALWAYS call this after filtering (and
+    scoring, if it happened) and before presenting results — never compute policy
+    effects yourself.
+
+    Args:
+        yarn_ids: Material Numbers of the current candidates.
+        scores: Material Number -> current score. Use 0.0 for all of them if scoring
+            was skipped (e.g. only one candidate was returned by the filter).
+        one_off_constraints: Structured constraints stated for THIS QUERY ONLY, not
+            persisted to the DB — same shape as a DB policy:
+            [{"constraint_type": "...", "target_value": "...",
+              "action": "boost" | "hard_restrict", "weight": float | None}]
+    """
+    db = SessionLocal()
+    try:
+        db_policies = crud.get_active_sourcing_constraints(db, scope="all_orders")
+        
+        # We need to build the scored_yarns list format that apply_policies expects
+        yarns = db.query(models.YarnSupplier).filter(models.YarnSupplier.Material_No.in_(yarn_ids)).all()
+        scored_yarns = []
+        for yarn in yarns:
+            scored_yarns.append({"yarn": yarn, "score": scores.get(yarn.Material_No, 0.0)})
+            
+        result = apply_policies(scored_yarns, db_policies, one_off_constraints)
+        
+        # Format for LLM
+        output = []
+        if result["all_excluded_by_policy"]:
+            output.append("ALL CANDIDATES EXCLUDED BY POLICY.")
+            
+        if result["excluded"]:
+            output.append("--- EXCLUDED YARNS ---")
+            for ex in result["excluded"]:
+                output.append(f"Material {ex['yarn_id']}: {ex['reason']}")
+                
+        if result["applied_boosts"]:
+            output.append("--- APPLIED BOOSTS ---")
+            for b in result["applied_boosts"]:
+                output.append(f"Material {b['yarn_id']}: +{b['boost']} ({b['reason']})")
+                
+        output.append("--- FINAL RANKED LIST ---")
+        for i, item in enumerate(result["final_ranked"], 1):
+            y = item["yarn"]
+            score = item["score"]
+            output.append(
+                f"{i}. [Final Score: {score}] Material_No: {y.Material_No}, Type: {y.Type}, Price: ${y.Price}, Lead Time: {y.lt_max_days} days, Supplier: {y.Supplier}, Country: {y.Country}"
+            )
+            
+        return "\n".join(output)
+    finally:
+        db.close()
+
 # List of tools to be bound to the agent
-AGENT_TOOLS = [filter_yarns_tool]
+AGENT_TOOLS = [filter_yarns_tool, score_yarns_tool, add_sourcing_constraint_tool, get_active_policies_tool, apply_policies_tool]
