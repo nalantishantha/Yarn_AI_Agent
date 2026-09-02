@@ -2,7 +2,6 @@ import os
 from langgraph.graph import StateGraph, START, END
 from langgraph.prebuilt import ToolNode, tools_condition
 from langgraph.checkpoint.memory import MemorySaver
-from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_openai import ChatOpenAI
 from dotenv import load_dotenv
 
@@ -12,17 +11,13 @@ from app.agent.tools import AGENT_TOOLS
 # Make sure env is loaded
 load_dotenv()
 
-# Initialize Gemini LLM (Primary)
-gemini_llm = ChatGoogleGenerativeAI(model="gemini-3.6-flash")
-gemini_with_tools = gemini_llm.bind_tools(AGENT_TOOLS)
-
-# Initialize OpenAI LLM (Fallback)
+# Initialize OpenAI LLM (Primary)
 # Requires OPENAI_API_KEY in .env
 openai_llm = ChatOpenAI(model="gpt-4o-mini")
 openai_with_tools = openai_llm.bind_tools(AGENT_TOOLS, parallel_tool_calls=False)
 
-# Combine with fallback: If Gemini hits a rate limit, LangChain automatically tries OpenAI!
-llm_with_tools = gemini_with_tools.with_fallbacks([openai_with_tools])
+# Use OpenAI as the sole LLM
+llm_with_tools = openai_with_tools
 
 from langchain_core.messages import SystemMessage
 
@@ -30,9 +25,9 @@ SYSTEM_PROMPT = """You are a Yarn Selection AI Agent.
 You MUST follow this EXACT sequential flow. CRITICAL RULE: NEVER call multiple tools in parallel at the same time. Always wait for the result of one tool before calling the next.
 
 STEP 1: DATABASE POLICIES (WRITE)
-Check if the user stated any *long-term* policies (e.g., "blacklist supplier Z for all orders").
+Check if the user stated any *long-term* policies (e.g., "blacklist supplier Z for all future orders", "from now on").
 If so, call `add_sourcing_constraint_tool` to propose writing it to the database.
-CRITICAL RULE: NEVER call `add_sourcing_constraint_tool` for one-off policies that only apply to the current search (e.g., "for this order", "just for this query", "this time").
+CRITICAL RULE: NEVER call `add_sourcing_constraint_tool` for one-off policies that only apply to the current search (e.g., "for this order", "just for this query", "this time", "for this specific order"). If the user states a one-off policy, DO NOT use this tool; instead, you will pass that constraint to `apply_policies_tool` in Step 4.
 
 STEP 2: FILTERING
 Call `filter_yarns_tool` with the exact attributes the user mentioned.
