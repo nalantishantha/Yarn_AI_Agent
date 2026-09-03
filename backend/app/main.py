@@ -32,47 +32,63 @@ class ChatResponse(BaseModel):
     is_interrupted: bool = False
     pending_tool_call: dict = None
 
+def extract_reply_text(state_before, state_after):
+    start_idx = len(state_before.values.get("messages", [])) if state_before and state_before.values else 0
+    all_messages = state_after.values.get("messages", []) if state_after and state_after.values else []
+    new_msgs = all_messages[start_idx:]
+    
+    reply_parts = []
+    for msg in new_msgs:
+        if msg.type == "ai" and getattr(msg, "content", None):
+            content = msg.content
+            if isinstance(content, list):
+                content = " ".join([p.get("text", "") if isinstance(p, dict) else str(p) for p in content])
+            if content.strip():
+                reply_parts.append(content.strip())
+    
+    return "\n\n".join(reply_parts)
+
+def build_chat_response(current_state, new_state) -> ChatResponse:
+    reply_text = extract_reply_text(current_state, new_state)
+
+    if new_state.next and "sensitive_tools" in new_state.next:
+        all_messages = new_state.values.get("messages", [])
+        last_msg = all_messages[-1] if all_messages else None
+        proposed_policy = {}
+        if last_msg and hasattr(last_msg, "tool_calls"):
+            for call in last_msg.tool_calls:
+                if call["name"] == "add_sourcing_constraint_tool":
+                    proposed_policy = call["args"]
+
+        narration = reply_text or (
+            f"Regarding a proposed policy "
+            f"({proposed_policy.get('constraint_type', 'policy')} on "
+            f"{proposed_policy.get('target_value', 'target')}):"
+        )
+        return ChatResponse(
+            reply=f"{narration}\n\nI need your permission to write this policy to the database. Do you approve? (Yes/No)",
+            is_interrupted=True,
+            pending_tool_call=proposed_policy,
+        )
+
+    if reply_text:
+        return ChatResponse(reply=reply_text)
+    return ChatResponse(reply="No response from agent.")
+
 @app.post("/api/chat", response_model=ChatResponse)
 async def chat_endpoint(req: ChatRequest):
     if not req.thread_id:
         raise HTTPException(status_code=400, detail="thread_id is required")
         
     config = {"configurable": {"thread_id": req.thread_id}}
-    
-    # If the user is responding to an interrupt (like approving a policy), 
-    # we just pass their message back into the graph.
     messages = [HumanMessage(content=req.message)] if req.message else None
     
     try:
-        response = agent_graph.invoke({"messages": messages} if messages else None, config)
+        current_state = agent_graph.get_state(config)
+        agent_graph.invoke({"messages": messages} if messages else None, config)
+        new_state = agent_graph.get_state(config)
         
-        # Check if the graph was interrupted (e.g. for a sensitive tool call)
-        state = agent_graph.get_state(config)
-        
-        if state.next and "sensitive_tools" in state.next:
-            # We hit an interrupt! We need to ask the user for confirmation.
-            last_msg = state.values["messages"][-1]
-            proposed_policy = None
-            if hasattr(last_msg, "tool_calls"):
-                for call in last_msg.tool_calls:
-                    if call["name"] == "add_sourcing_constraint_tool":
-                        proposed_policy = call["args"]
-                        
-            return ChatResponse(
-                reply="I need your permission to write this policy to the database. Do you approve? (Yes/No)",
-                is_interrupted=True,
-                pending_tool_call=proposed_policy
-            )
-            
-        # Normal execution finished
-        if response and "messages" in response:
-            final_msg = response["messages"][-1]
-            reply_text = final_msg.content
-            if isinstance(reply_text, list):
-                reply_text = " ".join([p.get("text", "") if isinstance(p, dict) else str(p) for p in reply_text])
-            return ChatResponse(reply=str(reply_text))
-            
-        return ChatResponse(reply="No response from agent.")
+        return build_chat_response(current_state, new_state)
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -101,17 +117,16 @@ async def reject_tool_endpoint(req: ChatRequest):
             name="add_sourcing_constraint_tool",
             tool_call_id=tool_call_id
         )
-        # Simulate the tool returning the rejection message
-        agent_graph.update_state(config, {"messages": [rejection_msg]}, as_node="sensitive_tools")
-        
-        # Resume the graph
-        response = agent_graph.invoke(None, config)
-        if response and "messages" in response:
-            final_msg = response["messages"][-1]
-            reply_text = final_msg.content
-            if isinstance(reply_text, list):
-                reply_text = " ".join([p.get("text", "") if isinstance(p, dict) else str(p) for p in reply_text])
-            return ChatResponse(reply=str(reply_text))
+        try:
+            current_state = agent_graph.get_state(config)
+            agent_graph.update_state(config, {"messages": [rejection_msg]}, as_node="sensitive_tools")
+            
+            agent_graph.invoke(None, config)
+            new_state = agent_graph.get_state(config)
+            
+            return build_chat_response(current_state, new_state)
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e))
             
     return ChatResponse(reply="Failed to reject tool.")
 
@@ -127,15 +142,10 @@ async def approve_tool_endpoint(req: ChatRequest):
         raise HTTPException(status_code=400, detail="No pending sensitive tool call to approve.")
         
     try:
-        # Resume the graph with None. The ToolNode will execute the tool automatically.
-        response = agent_graph.invoke(None, config)
-        if response and "messages" in response:
-            final_msg = response["messages"][-1]
-            reply_text = final_msg.content
-            if isinstance(reply_text, list):
-                reply_text = " ".join([p.get("text", "") if isinstance(p, dict) else str(p) for p in reply_text])
-            return ChatResponse(reply=str(reply_text))
-            
-        return ChatResponse(reply="No response from agent.")
+        current_state = agent_graph.get_state(config)
+        agent_graph.invoke(None, config)
+        new_state = agent_graph.get_state(config)
+        
+        return build_chat_response(current_state, new_state)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
