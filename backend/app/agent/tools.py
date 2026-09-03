@@ -1,4 +1,5 @@
 import json
+import uuid
 from typing import Optional, List, Dict, Any
 from langchain_core.tools import tool
 from app.db.database import SessionLocal
@@ -86,6 +87,10 @@ def filter_yarns_tool(
 
         if not results:
             return json.dumps({"count": 0, "candidates": []})
+            
+        all_yarn_ids = [y.Material_No for y in results]
+        search_id = str(uuid.uuid4())
+        crud.create_search_session(db, search_id, all_yarn_ids)
 
         candidates = []
         for y in results[:10]:  # Limit to 10 to save LLM context window
@@ -102,21 +107,20 @@ def filter_yarns_tool(
                 "lustre": y.Lustre,
             })
 
-        return json.dumps({"count": len(candidates), "candidates": candidates})
+        return json.dumps({"count": len(all_yarn_ids), "search_id": search_id, "candidates": candidates})
     finally:
         db.close()
 
 
 @tool
-def score_yarns_tool(yarn_ids: List[int], weights: Dict[str, float]):
+def score_yarns_tool(search_id: str, weights: Dict[str, float]):
     """
     Applies the Weighted Scoring Formula to a list of candidate yarns to rank them based on user priorities.
     Use this tool AFTER calling filter_yarns_tool to sort the returned yarns according to what the user values most.
-    Returns yarn_ids with their scores so you can pass them directly to the apply_policies_tool.
+    Returns ranked yarns and the search_id to pass to apply_policies_tool.
 
     Args:
-        yarn_ids: A list of Material Numbers (IDs) returned from the previous filtering step.
-                  Use the yarn_id values from filter_yarns_tool output EXACTLY as returned.
+        search_id: The search_id returned from filter_yarns_tool.
         weights: A dictionary where keys are the attributes to prioritize and values are decimals
                  between 0.0 and 1.0 representing the percentage weight. The sum of all values should equal 1.0.
                  Valid keys MUST be chosen from this exact list:
@@ -124,13 +128,23 @@ def score_yarns_tool(yarn_ids: List[int], weights: Dict[str, float]):
     """
     db = SessionLocal()
     try:
+        session = crud.get_search_session(db, search_id)
+        if not session:
+            return "Error: Invalid or expired search_id."
+            
+        yarn_ids = json.loads(session.yarn_ids)
+        
         try:
             results = score_and_sort_yarns(db, yarn_ids, weights)
         except ValueError as e:
             return str(e)
 
         if not results:
-            return json.dumps({"ranked": []})
+            return json.dumps({"search_id": search_id, "ranked": []})
+            
+        # Save scores to DB
+        scores_dict = {str(item["yarn"].Material_No): item["score"] for item in results}
+        crud.update_search_session_scores(db, search_id, scores_dict)
 
         ranked = []
         for item in results[:10]:
@@ -146,7 +160,7 @@ def score_yarns_tool(yarn_ids: List[int], weights: Dict[str, float]):
                 "country": y.Country,
             })
 
-        return json.dumps({"ranked": ranked})
+        return json.dumps({"search_id": search_id, "ranked": ranked})
     finally:
         db.close()
 
@@ -215,8 +229,7 @@ def get_active_policies_tool(scope: str = "all_orders"):
 
 @tool
 def apply_policies_tool(
-    yarn_ids: List[int],
-    scores: Dict[str, float],
+    search_id: str,
     one_off_constraints: Optional[List[Dict[str, Any]]] = None,
 ):
     """
@@ -231,12 +244,7 @@ def apply_policies_tool(
     before calling this tool.
 
     Args:
-        yarn_ids: Material Numbers of the current candidates.
-                  Use the yarn_id values from filter_yarns_tool or score_yarns_tool output EXACTLY.
-        scores: Mapping of Material Number (as string key) to current score.
-                Example: {"101": 0.85, "205": 0.72}
-                Use 0.0 for all if scoring was skipped (only one candidate).
-                Use the score values from score_yarns_tool output.
+        search_id: The search_id returned from filter_yarns_tool or score_yarns_tool.
         one_off_constraints: Structured constraints stated for THIS QUERY ONLY, not
             persisted to the DB — same shape as a DB policy:
             [{"constraint_type": "...", "target_value": "...",
@@ -244,6 +252,13 @@ def apply_policies_tool(
     """
     db = SessionLocal()
     try:
+        session = crud.get_search_session(db, search_id)
+        if not session:
+            return "Error: Invalid or expired search_id."
+            
+        yarn_ids = json.loads(session.yarn_ids)
+        scores = json.loads(session.scores) if session.scores else {}
+        
         db_policies = crud.get_active_sourcing_constraints(db, scope="all_orders")
 
         yarns = db.query(models.YarnSupplier).filter(models.YarnSupplier.Material_No.in_(yarn_ids)).all()
@@ -270,7 +285,7 @@ def apply_policies_tool(
             "final_ranked": []
         }
 
-        for i, item in enumerate(result["final_ranked"], 1):
+        for i, item in enumerate(result["final_ranked"][:10], 1):
             y = item["yarn"]
             output["final_ranked"].append({
                 "rank": i,
