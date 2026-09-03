@@ -69,11 +69,6 @@ body {
   color: #333;
 }
 
-.example-text {
-  font-style: italic;
-  color: #888;
-}
-
 .message-wrapper {
   display: flex;
   padding: 24px 20px;
@@ -239,4 +234,52 @@ body {
 .btn-reject {
   background-color: #e5e5e5;
   color: #333;
+}
+
+/* Prompt Guide */
+.prompt-guide {
+  margin-top: 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  max-width: 600px;
+  text-align: left;
+}
+
+.prompt-guide h4 {
+  margin: 0;
+  color: #555;
+  font-size: 1.05rem;
+}
+
+.prompt-guide > p {
+  margin: 0;
+  font-size: 0.95rem;
+  color: #666;
+  line-height: 1.5;
+}
+
+.example-block {
+  margin-top: 8px;
+  background-color: #f0f7f5;
+  border: 1px solid #d1ebd8;
+  border-left: 4px solid var(--accent-color);
+  border-radius: 6px;
+  padding: 16px;
+}
+
+.example-block strong {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--accent-color);
+  font-size: 0.95rem;
+}
+
+.example-block p {
+  margin: 0;
+  font-size: 0.9rem;
+  color: #444;
+  line-height: 1.6;
+  font-family: Consolas, Monaco, "Courier New", monospace;
 }

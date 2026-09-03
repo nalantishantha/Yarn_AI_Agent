@@ -132,8 +132,28 @@ export default function ChatInterface() {
         {messages.length === 0 ? (
           <div className="empty-state">
             <h3>Welcome to Yarn AI!</h3>
-            <p>I can help you select, filter, and score yarns based on your criteria.</p>
-            <p className="example-text">Example: "Find me cotton yarns under $8, prioritize lead time."</p>
+            <p>I can help you select, filter, and score yarns across multiple requirements.</p>
+            
+            <div className="prompt-guide">
+              <h4>How to write a perfect search prompt:</h4>
+              <p>
+                To get the best results for an order, state your requirements clearly:
+                <br /><br />
+                • <strong>Multi-Yarn Selection:</strong> List each yarn separately (e.g., Yarn 1, Yarn 2) with its required material and hard limits (like "under $10").<br />
+                • <strong>Priorities:</strong> Tell me what matters most for each yarn. You can use exact percentages (e.g., "100% price") or just general preferences (e.g., "prioritize lead time"), and I will help you balance them.<br />
+                • <strong>Situational Policies:</strong> If you need to exclude a supplier just for this order, or create a long-term rule (e.g., "always exclude Toray"), include that directly in your request.
+              </p>
+              
+              <div className="example-block">
+                <strong>Example Prompt:</strong>
+                <p>
+                  "I need an article with 3 yarns.<br/>
+                  Yarn 1: Cotton under $10, prioritize price 100%.<br/>
+                  Yarn 2: Elastane, I want to prioritize lead time but give me some options.<br/>
+                  Yarn 3: Polyester, 100% quality. Also, exclude supplier Toray for this entire order."
+                </p>
+              </div>
+            </div>
           </div>
         ) : (
           messages.map((msg, index) => (
