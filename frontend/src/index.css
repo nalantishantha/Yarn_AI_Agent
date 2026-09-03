@@ -283,3 +283,54 @@ body {
   line-height: 1.6;
   font-family: Consolas, Monaco, "Courier New", monospace;
 }
+
+/* ======================================================
+   Markdown Table Styling (for agent GFM table output)
+   ====================================================== */
+.message-content .table-wrapper {
+  overflow-x: auto;
+  margin: 12px 0;
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+}
+
+.message-content table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+  min-width: 420px;
+}
+
+.message-content thead {
+  background-color: #f0f7f5;
+}
+
+.message-content th {
+  padding: 10px 14px;
+  text-align: left;
+  font-weight: 600;
+  color: #1a5c48;
+  border-bottom: 2px solid #c8e6dd;
+  white-space: nowrap;
+}
+
+.message-content td {
+  padding: 9px 14px;
+  border-bottom: 1px solid #eef0ef;
+  color: var(--text-color);
+  vertical-align: top;
+}
+
+.message-content tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.message-content tbody tr:nth-child(even) {
+  background-color: #fafafa;
+}
+
+.message-content tbody tr:hover {
+  background-color: #f0f7f5;
+  transition: background-color 0.15s ease;
+}
+
