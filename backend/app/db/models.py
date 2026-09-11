@@ -154,4 +154,33 @@ class SearchSession(Base):
     search_id = Column(String, primary_key=True, index=True)
     yarn_ids = Column(String, nullable=False) # JSON encoded list of ints
     scores = Column(String, nullable=True) # JSON encoded dict
+    article_req = Column(String, nullable=True) # JSON encoded dict of original requirements
     created_at = Column(DateTime, default=datetime.utcnow)
+
+class ArticleRequirement(Base):
+    __tablename__ = 'article_requirements'
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    Article_No = Column(String, index=True) 
+    Yarn_Slot = Column(String) # 'Yarn_1', 'Yarn_2', etc.
+    
+    # Technical requirements (Matching YarnFilterRequest exactly)
+    price_max = Column(Float, nullable=True)
+    tenacity_min = Column(Float, nullable=True)
+    elongation_min = Column(Float, nullable=True)
+    count_dtex_min = Column(Float, nullable=True)
+    count_dtex_max = Column(Float, nullable=True)
+    shrinkage_max = Column(Float, nullable=True)
+    twist_per_metre_min = Column(Float, nullable=True)
+    twist_per_metre_max = Column(Float, nullable=True)
+    material_type = Column(String, nullable=True)
+    supplier = Column(String, nullable=True)
+    tensile_strength_min = Column(Float, nullable=True)
+    breaking_tenacity_min = Column(Float, nullable=True)
+    supplier_tenacity_min = Column(Float, nullable=True)
+    supplier_elongation_min = Column(Float, nullable=True)
+    lustre = Column(String, nullable=True)
+    country = Column(String, nullable=True)
+    fully_drawn_textured = Column(String, nullable=True)
+    lead_time_max_days = Column(Integer, nullable=True)
+    moq_max = Column(Float, nullable=True)

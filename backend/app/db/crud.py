@@ -46,10 +46,11 @@ def get_design_articles(db: Session, skip: int = 0, limit: int = 100) -> List[mo
     """
     return db.query(models.DesignDatabase).offset(skip).limit(limit).all()
 
-def create_search_session(db: Session, search_id: str, yarn_ids: List[int]) -> models.SearchSession:
+def create_search_session(db: Session, search_id: str, yarn_ids: List[int], article_req: Optional[Dict] = None) -> models.SearchSession:
     db_session = models.SearchSession(
         search_id=search_id,
-        yarn_ids=json.dumps(yarn_ids)
+        yarn_ids=json.dumps(yarn_ids),
+        article_req=json.dumps(article_req) if article_req else None
     )
     db.add(db_session)
     db.commit()
