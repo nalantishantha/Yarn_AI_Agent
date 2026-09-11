@@ -9,6 +9,7 @@ from app.db import crud, models
 from app.schemas import schemas
 from app.services.scoring import score_and_sort_yarns
 from app.services.policy_engine import apply_policies
+from app.services.recommender import calculate_historical_boosts
 
 @tool
 def filter_yarns_tool(
@@ -90,7 +91,7 @@ def filter_yarns_tool(
             
         all_yarn_ids = [y.Material_No for y in results]
         search_id = str(uuid.uuid4())
-        crud.create_search_session(db, search_id, all_yarn_ids)
+        crud.create_search_session(db, search_id, all_yarn_ids, article_req=req.model_dump(exclude_none=True))
 
         candidates = []
         for y in results[:10]:  # Limit to 10 to save LLM context window
@@ -271,6 +272,12 @@ def apply_policies_tool(
 
         result = apply_policies(scored_yarns, db_policies, one_off_constraints)
 
+        # Save post-policy scores to DB for the next step (historical re-ranking)
+        post_policy_scores = {}
+        for item in result["final_ranked"]:
+            post_policy_scores[str(item["yarn"].Material_No)] = item["score"]
+        crud.update_search_session_scores(db, search_id, post_policy_scores)
+
         # Format structured output for LLM
         output = {
             "all_excluded_by_policy": result["all_excluded_by_policy"],
@@ -303,9 +310,79 @@ def apply_policies_tool(
         db.close()
 
 
+@tool
+def historical_re_rank_tool(
+    search_id: str,
+    historical_weight: float = 0.2
+):
+    """
+    Applies a historical track-record boost to candidate yarns as Step 4 in the pipeline.
+    ALWAYS call this after apply_policies_tool if the user wants historical recommendations.
+    
+    Args:
+        search_id: The search_id passed throughout the pipeline.
+        historical_weight: A decimal between 0.0 and 1.0 representing how much to weight historical success. Default is 0.2.
+    """
+    db = SessionLocal()
+    try:
+        session = crud.get_search_session(db, search_id)
+        if not session or not session.article_req:
+            return "Error: Invalid search_id or missing requirements."
+            
+        current_req = json.loads(session.article_req)
+        scores = json.loads(session.scores) if session.scores else {}
+        yarn_ids = [int(y_id) for y_id in scores.keys()]
+        
+        if not yarn_ids:
+            yarn_ids = json.loads(session.yarn_ids)
+            
+        # Calculate historical boosts based on similarity
+        boosts = calculate_historical_boosts(db, current_req, yarn_ids)
+        
+        # Apply boosts and re-sort
+        yarns = db.query(models.YarnSupplier).filter(models.YarnSupplier.Material_No.in_(yarn_ids)).all()
+        final_list = []
+        for y in yarns:
+            y_id_str = str(y.Material_No)
+            base_score = scores.get(y_id_str, 0.0)
+            hist_boost = boosts.get(y_id_str, 0.0)
+            
+            final_score = base_score + (hist_boost * historical_weight)
+            final_list.append({
+                "yarn": y,
+                "score": final_score,
+                "hist_boost": hist_boost
+            })
+            
+        # Sort descending by final score
+        final_list.sort(key=lambda x: x['score'], reverse=True)
+        
+        # Save final scores
+        final_scores_dict = {str(item["yarn"].Material_No): item["score"] for item in final_list}
+        crud.update_search_session_scores(db, search_id, final_scores_dict)
+
+        output = {"historical_re_ranked": []}
+        for i, item in enumerate(final_list[:10], 1):
+            y = item["yarn"]
+            output["historical_re_ranked"].append({
+                "rank": i,
+                "yarn_id": y.Material_No,
+                "final_score": round(item["score"], 4),
+                "historical_bonus_applied": round(item["hist_boost"] * historical_weight, 4),
+                "type": y.Type,
+                "supplier": y.Supplier,
+                "price": y.Price,
+                "lead_time_days": y.lt_max_days,
+                "country": y.Country,
+            })
+            
+        return json.dumps(output)
+    finally:
+        db.close()
+
 # List of tools to be bound to the agent.
 # get_active_policies_tool is intentionally excluded from this list:
 # - apply_policies_tool fetches DB policies internally as part of the selection pipeline.
 # - get_active_policies_tool is kept as a function but NOT exposed to the agent to avoid
 #   confusion about which tool to call during the sequential selection flow.
-AGENT_TOOLS = [filter_yarns_tool, score_yarns_tool, add_sourcing_constraint_tool, apply_policies_tool]
+AGENT_TOOLS = [filter_yarns_tool, score_yarns_tool, add_sourcing_constraint_tool, apply_policies_tool, historical_re_rank_tool]
