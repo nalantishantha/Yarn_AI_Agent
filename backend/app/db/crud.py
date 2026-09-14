@@ -67,3 +67,22 @@ def update_search_session_scores(db: Session, search_id: str, scores: Dict[str, 
         db.commit()
         db.refresh(db_session)
     return db_session
+
+def get_chat_sessions(db: Session, skip: int = 0, limit: int = 50) -> List[models.ChatSession]:
+    return db.query(models.ChatSession).order_by(models.ChatSession.updated_at.desc()).offset(skip).limit(limit).all()
+
+def create_chat_session(db: Session, thread_id: str, title: str) -> models.ChatSession:
+    db_session = models.ChatSession(thread_id=thread_id, title=title)
+    db.add(db_session)
+    db.commit()
+    db.refresh(db_session)
+    return db_session
+
+def touch_chat_session(db: Session, thread_id: str) -> Optional[models.ChatSession]:
+    from datetime import datetime
+    db_session = db.query(models.ChatSession).filter(models.ChatSession.thread_id == thread_id).first()
+    if db_session:
+        db_session.updated_at = datetime.utcnow()
+        db.commit()
+        db.refresh(db_session)
+    return db_session
