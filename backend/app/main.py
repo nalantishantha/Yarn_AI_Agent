@@ -165,6 +165,13 @@ async def approve_tool_endpoint(req: ChatRequest):
 async def get_sessions(skip: int = 0, limit: int = 50, db: Session = Depends(get_db)):
     return crud.get_chat_sessions(db, skip=skip, limit=limit)
 
+@app.delete("/api/chat/sessions/{thread_id}")
+async def delete_session(thread_id: str, db: Session = Depends(get_db)):
+    success = crud.delete_chat_session(db, thread_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Session not found")
+    return {"status": "success"}
+
 @app.get("/api/chat/sessions/{thread_id}/messages")
 async def get_session_messages(thread_id: str):
     config = {"configurable": {"thread_id": thread_id}}

@@ -86,3 +86,11 @@ def touch_chat_session(db: Session, thread_id: str) -> Optional[models.ChatSessi
         db.commit()
         db.refresh(db_session)
     return db_session
+
+def delete_chat_session(db: Session, thread_id: str) -> bool:
+    db_session = db.query(models.ChatSession).filter(models.ChatSession.thread_id == thread_id).first()
+    if db_session:
+        db.delete(db_session)
+        db.commit()
+        return True
+    return False
