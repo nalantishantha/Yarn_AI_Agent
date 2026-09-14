@@ -184,3 +184,11 @@ class ArticleRequirement(Base):
     fully_drawn_textured = Column(String, nullable=True)
     lead_time_max_days = Column(Integer, nullable=True)
     moq_max = Column(Float, nullable=True)
+
+class ChatSession(Base):
+    __tablename__ = 'chat_sessions'
+    
+    thread_id = Column(String, primary_key=True, index=True)
+    title = Column(String, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
