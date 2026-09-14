@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import ChatMessage from './ChatMessage';
 
-export default function ChatInterface({ threadId }) {
+export default function ChatInterface({ threadId, onChatUpdate }) {
   const [messages, setMessages] = useState([]);
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -62,6 +62,7 @@ export default function ChatInterface({ threadId }) {
       };
       
       setMessages((prev) => [...prev, agentMessage]);
+      if (onChatUpdate) onChatUpdate();
     } catch (error) {
       console.error('Failed to send message:', error);
       setMessages((prev) => [...prev, { text: "Error connecting to the AI agent.", isUser: false }]);

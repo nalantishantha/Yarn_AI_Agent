@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
+import deleteIcon from '../assets/icons8-delete.svg';
 
-export default function Sidebar({ currentThreadId, onSelectThread, onNewChat }) {
+export default function Sidebar({ currentThreadId, onSelectThread, onNewChat, refreshTrigger }) {
   const [sessions, setSessions] = useState([]);
 
   const fetchSessions = async () => {
@@ -15,7 +16,21 @@ export default function Sidebar({ currentThreadId, onSelectThread, onNewChat }) 
 
   useEffect(() => {
     fetchSessions();
-  }, [currentThreadId]); 
+  }, [currentThreadId, refreshTrigger]); 
+
+  const handleDelete = async (e, id) => {
+    e.stopPropagation();
+    try {
+      await fetch(`http://localhost:8000/api/chat/sessions/${id}`, { method: 'DELETE' });
+      if (id === currentThreadId) {
+        onNewChat();
+      } else {
+        fetchSessions();
+      }
+    } catch (e) {
+      console.error("Failed to delete", e);
+    }
+  };
 
   return (
     <div className="sidebar">
@@ -29,7 +44,14 @@ export default function Sidebar({ currentThreadId, onSelectThread, onNewChat }) 
             className={`session-item ${session.thread_id === currentThreadId ? 'active' : ''}`}
             onClick={() => onSelectThread(session.thread_id)}
           >
-            {session.title}
+            <span className="session-title">{session.title}</span>
+            <img 
+              src={deleteIcon} 
+              className="delete-btn" 
+              onClick={(e) => handleDelete(e, session.thread_id)} 
+              title="Delete chat" 
+              alt="Delete" 
+            />
           </div>
         ))}
       </div>

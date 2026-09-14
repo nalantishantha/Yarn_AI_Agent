@@ -63,6 +63,29 @@ body {
   text-overflow: ellipsis;
   font-size: 0.9rem;
   transition: background-color 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.delete-btn {
+  margin-left: 8px;
+  opacity: 0.5;
+  transition: opacity 0.2s;
+  width: 18px;
+  height: 18px;
+  filter: invert(1);
+}
+
+.delete-btn:hover {
+  opacity: 1;
+}
+
+.session-title {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: left;
 }
 
 .session-item:hover {
