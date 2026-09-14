@@ -525,8 +525,19 @@ def create_agent_graph():
     builder.add_edge("sensitive_tools", "agent")
     builder.add_edge("reject_mixed_tool_batch", "agent")
     
-    # Compile with memory
-    memory = MemorySaver()
+    # Compile with Postgres memory
+    from app.db.database import SQLALCHEMY_DATABASE_URL
+    import psycopg
+    from psycopg_pool import ConnectionPool
+    from langgraph.checkpoint.postgres import PostgresSaver
+
+    # Convert SQLALCHEMY_DATABASE_URL if needed, but psycopg3 handles standard postgresql:// URLs
+    with psycopg.connect(SQLALCHEMY_DATABASE_URL, autocommit=True) as conn:
+        PostgresSaver(conn).setup() # Ensure checkpoint tables are created
+
+    pool = ConnectionPool(conninfo=SQLALCHEMY_DATABASE_URL)
+    memory = PostgresSaver(pool)
+
     graph = builder.compile(checkpointer=memory, interrupt_before=["sensitive_tools"])
     
     return graph
