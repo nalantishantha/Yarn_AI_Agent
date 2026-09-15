@@ -1,10 +1,12 @@
 import React, { useState, useRef, useEffect } from 'react';
 import ChatMessage from './ChatMessage';
+import StructuredFormInput from './StructuredFormInput';
 
 export default function ChatInterface({ threadId, onChatUpdate }) {
   const [messages, setMessages] = useState([]);
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [inputType, setInputType] = useState('text');
   
   const endOfMessagesRef = useRef(null);
   const textareaRef = useRef(null);
@@ -204,17 +206,46 @@ export default function ChatInterface({ threadId, onChatUpdate }) {
 
       <div className="chat-input-area">
         <div className="input-wrapper">
-          <textarea
-            ref={textareaRef}
-            value={inputValue}
-            onChange={handleInput}
-            onKeyDown={handleKeyPress}
-            placeholder="Type your message here..."
-            rows="1"
+          <div className="input-mode-toggle">
+            <button 
+              className={`toggle-btn ${inputType === 'text' ? 'active' : ''}`}
+              onClick={() => setInputType('text')}
+              title="Text Input"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 6.1H3"/><path d="M21 12.1H3"/><path d="M15.1 18H3"/></svg>
+            </button>
+            <button 
+              className={`toggle-btn ${inputType === 'form' ? 'active' : ''}`}
+              onClick={() => setInputType('form')}
+              title="Structured Form"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/></svg>
+            </button>
+          </div>
+          
+          {inputType === 'text' ? (
+            <div className="text-input-row">
+              <textarea
+                ref={textareaRef}
+                value={inputValue}
+                onChange={handleInput}
+                onKeyDown={handleKeyPress}
+                placeholder="Type your message here..."
+                rows="1"
+              />
+              <button className="send-btn" onClick={() => handleSend()} disabled={isLoading || !inputValue.trim()}>
+                Send
+              </button>
+            </div>
+          ) : (
+            <StructuredFormInput 
+            onSubmitForm={(prompt) => {
+              handleSend(prompt);
+              setInputType('text');
+            }} 
+            isLoading={isLoading} 
           />
-          <button className="send-btn" onClick={() => handleSend()} disabled={isLoading || !inputValue.trim()}>
-            Send
-          </button>
+          )}
         </div>
       </div>
     </div>
