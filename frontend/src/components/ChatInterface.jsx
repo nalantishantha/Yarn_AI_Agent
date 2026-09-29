@@ -1,11 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react';
 import ChatMessage from './ChatMessage';
 
-export default function ChatInterface() {
+export default function ChatInterface({ threadId, onChatUpdate }) {
   const [messages, setMessages] = useState([]);
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [threadId] = useState(() => crypto.randomUUID());
   
   const endOfMessagesRef = useRef(null);
   const textareaRef = useRef(null);
@@ -13,6 +12,23 @@ export default function ChatInterface() {
   useEffect(() => {
     endOfMessagesRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isLoading]);
+
+  useEffect(() => {
+    const fetchHistory = async () => {
+      setIsLoading(true);
+      try {
+        const res = await fetch(`http://localhost:8000/api/chat/sessions/${threadId}/messages`);
+        const data = await res.json();
+        setMessages(data.messages || []);
+      } catch (error) {
+        console.error('Failed to load history:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    
+    fetchHistory();
+  }, [threadId]);
 
   const handleSend = async (messageText) => {
     const textToSend = messageText || inputValue;
@@ -46,6 +62,7 @@ export default function ChatInterface() {
       };
       
       setMessages((prev) => [...prev, agentMessage]);
+      if (onChatUpdate) onChatUpdate();
     } catch (error) {
       console.error('Failed to send message:', error);
       setMessages((prev) => [...prev, { text: "Error connecting to the AI agent.", isUser: false }]);

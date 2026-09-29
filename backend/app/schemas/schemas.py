@@ -99,3 +99,12 @@ class YarnFilterRequest(BaseModel):
     fully_drawn_textured: Optional[str] = None
     lead_time_max_days: Optional[int] = None
     moq_max: Optional[float] = None
+
+class ChatSessionResponse(BaseModel):
+    thread_id: str
+    title: str
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True

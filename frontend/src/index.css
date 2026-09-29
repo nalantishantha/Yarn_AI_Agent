@@ -20,7 +20,87 @@ body {
 .app-container {
   height: 100vh;
   display: flex;
+}
+
+.sidebar {
+  width: 260px;
+  background-color: #202123;
+  color: #fff;
+  display: flex;
+  flex-direction: column;
+  padding: 10px;
+  overflow-y: auto;
+}
+
+.new-chat-btn {
+  background-color: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #fff;
+  padding: 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  text-align: left;
+  margin-bottom: 20px;
+  transition: background-color 0.2s;
+}
+
+.new-chat-btn:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+.sessions-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.session-item {
+  padding: 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 0.9rem;
+  transition: background-color 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.delete-btn {
+  margin-left: 8px;
+  opacity: 0.5;
+  transition: opacity 0.2s;
+  width: 18px;
+  height: 18px;
+  filter: invert(1);
+}
+
+.delete-btn:hover {
+  opacity: 1;
+}
+
+.session-title {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: left;
+}
+
+.session-item:hover {
+  background-color: #2A2B32;
+}
+
+.session-item.active {
+  background-color: #343541;
+}
+
+.main-content {
+  flex: 1;
+  display: flex;
   justify-content: center;
+  background-color: var(--bg-color);
 }
 
 .chat-container {
