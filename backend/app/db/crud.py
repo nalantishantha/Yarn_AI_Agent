@@ -1,6 +1,7 @@
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
-from typing import List, Optional
+from typing import List, Optional, Dict
+import json
 
 from app.db import models
 from app.schemas import schemas
@@ -44,3 +45,24 @@ def get_design_articles(db: Session, skip: int = 0, limit: int = 100) -> List[mo
     Retrieves a paginated list of design articles.
     """
     return db.query(models.DesignDatabase).offset(skip).limit(limit).all()
+
+def create_search_session(db: Session, search_id: str, yarn_ids: List[int]) -> models.SearchSession:
+    db_session = models.SearchSession(
+        search_id=search_id,
+        yarn_ids=json.dumps(yarn_ids)
+    )
+    db.add(db_session)
+    db.commit()
+    db.refresh(db_session)
+    return db_session
+
+def get_search_session(db: Session, search_id: str) -> Optional[models.SearchSession]:
+    return db.query(models.SearchSession).filter(models.SearchSession.search_id == search_id).first()
+
+def update_search_session_scores(db: Session, search_id: str, scores: Dict[str, float]) -> Optional[models.SearchSession]:
+    db_session = get_search_session(db, search_id)
+    if db_session:
+        db_session.scores = json.dumps(scores)
+        db.commit()
+        db.refresh(db_session)
+    return db_session

@@ -4,7 +4,7 @@ from sqlalchemy.orm import declarative_base, sessionmaker
 from dotenv import load_dotenv
 
 # Load environment variables from .env file
-load_dotenv()
+load_dotenv(override=True)
 
 # Fetch database URL from environment, fallback to a local postgres if not set
 SQLALCHEMY_DATABASE_URL = os.getenv(

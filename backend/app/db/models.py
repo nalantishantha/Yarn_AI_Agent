@@ -1,5 +1,6 @@
 from sqlalchemy import Column, Integer, String, Float, Boolean, DateTime, ForeignKey
 from sqlalchemy.orm import relationship
+from datetime import datetime
 from .database import Base
 
 class YarnSupplier(Base):
@@ -146,3 +147,11 @@ class SourcingConstraint(Base):
     reason = Column(String, nullable=True)
     set_by = Column(String, nullable=True)
     active = Column(Boolean, nullable=False, default=True)
+
+class SearchSession(Base):
+    __tablename__ = 'search_sessions'
+    
+    search_id = Column(String, primary_key=True, index=True)
+    yarn_ids = Column(String, nullable=False) # JSON encoded list of ints
+    scores = Column(String, nullable=True) # JSON encoded dict
+    created_at = Column(DateTime, default=datetime.utcnow)
