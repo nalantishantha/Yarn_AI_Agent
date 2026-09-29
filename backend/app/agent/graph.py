@@ -351,7 +351,7 @@ than one specific yarn, propose it once, during Yarn 1 only. Do not re-propose
 the same policy for later yarns in the same Article.
 
 ------------------------------------------------------------
-STEP 4: APPLY POLICIES + FINAL OUTPUT
+STEP 4: APPLY POLICIES
 ------------------------------------------------------------
 PREREQUISITE: You MUST NOT reach this step unless one of these is true:
   A) Step 2 ran the scoring tool and returned ranked results (use those scores), OR
@@ -399,28 +399,34 @@ supplier/country), you MUST output this warning:
 This warning is MANDATORY whenever one_off_constraints contained a prefer_supplier
 or prefer_country boost and applied_boosts is empty. Never silently omit it.
 
+------------------------------------------------------------
+STEP 5: HISTORICAL RE-RANKING + FINAL OUTPUT
+------------------------------------------------------------
+PREREQUISITE: You must call the historical_re_rank_tool ONLY AFTER Step 4 completes successfully.
+Call historical_re_rank_tool with:
+  search_id = (the same search_id passed through the pipeline)
+  historical_weight = 0.2 (default) or whatever weight the user specified for history.
+
+Once the tool returns, read the "historical_re_ranked" JSON array.
+
 MANDATORY FINAL OUTPUT — NEVER SKIP THIS BLOCK:
 After showing policy adjustments (or the "no policies" note), you MUST ALWAYS
-output the Final Recommended Yarns block below. The pipeline is not complete
-for a yarn until this block is shown. Do not advance the LOCK GATE counter
+output the Final Recommended Yarns block below using the results from historical_re_rank_tool. 
+The pipeline is not complete for a yarn until this block is shown. Do not advance the LOCK GATE counter
 (RULE FOUR) until this block has been written.
 
 **Final Recommended Yarns — Yarn <N>: <name>**
 
-| Rank | Yarn ID | Score | Price ($) | Lead Time (days) | Supplier |
-|------|---------|-------|-----------|------------------|----------|
-| 1 | <yarn_id> | <final_score> | <price> | <lead_time_days> | <supplier> |
-| 2 | <yarn_id> | <final_score> | <price> | <lead_time_days> | <supplier> |
-| 3 | <yarn_id> | <final_score> | <price> | <lead_time_days> | <supplier> |
+| Rank | Yarn ID | Final Score | History Bonus | Price ($) | Lead Time (days) | Supplier |
+|------|---------|-------------|---------------|-----------|------------------|----------|
+| 1 | <yarn_id> | <final_score> | <historical_bonus_applied> | <price> | <lead_time_days> | <supplier> |
+| 2 | <yarn_id> | <final_score> | <historical_bonus_applied> | <price> | <lead_time_days> | <supplier> |
+| 3 | <yarn_id> | <final_score> | <historical_bonus_applied> | <price> | <lead_time_days> | <supplier> |
 
 (For a single-yarn request, use the header "**Final Recommended Yarns:**" without the "Yarn N" label.)
 
-Use ALL items in final_ranked from the tool output — show every yarn returned.
+Use ALL items from the historical_re_rank_tool output.
 Never truncate or re-sort the list yourself.
-
-CRITICAL: Boost policies are SOFT preferences — they NEVER eliminate yarns from
-the final_ranked list. Only hard_restrict policies remove yarns. Even if the
-preferred supplier has no matching yarn, you MUST still show the full scored list.
 
 ------------------------------------------------------------
 LOOP CONTINUATION
